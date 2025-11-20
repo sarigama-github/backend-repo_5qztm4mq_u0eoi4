@@ -1,48 +1,59 @@
 """
-Database Schemas
+Database Schemas for QuizGen
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model corresponds to a MongoDB collection (lowercased class name).
+- User -> "user"
+- Quiz -> "quiz"
+- QuizAttempt -> "quizattempt"
+- Question is an embedded model used inside Quiz documents
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional, Literal
 
-# Example schemas (replace with your own):
+
+class UserPreferences(BaseModel):
+    theme: Literal["light", "dark", "neon"] = "neon"
+    default_difficulty: Literal["Easy", "Medium", "Hard"] = "Easy"
+
 
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
     name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    email: EmailStr = Field(..., description="Email address")
+    avatar: Optional[str] = Field(None, description="Avatar URL")
+    preferences: Optional[UserPreferences] = Field(default_factory=UserPreferences)
+    password_hash: str = Field(..., description="BCrypt password hash")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class Question(BaseModel):
+    prompt: str = Field(..., description="Question text")
+    options: List[str] = Field(..., min_items=2, description="Multiple-choice options")
+    answer_index: int = Field(..., ge=0, description="Index of correct answer in options")
+    explanation: Optional[str] = Field(None, description="Explanation for the correct answer")
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+
+class Quiz(BaseModel):
+    title: str
+    category: Literal["Academic", "Entertainment", "General Knowledge"]
+    subcategory: str
+    difficulty: Literal["Easy", "Medium", "Hard"]
+    questions: List[Question]
+    created_by: Optional[str] = Field(None, description="User id if user-generated")
+
+
+class UserAnswer(BaseModel):
+    question_index: int
+    selected_index: Optional[int] = None
+
+
+class QuizAttempt(BaseModel):
+    user_id: str
+    quiz_id: str
+    status: Literal["ongoing", "completed"] = "ongoing"
+    answers: List[UserAnswer] = Field(default_factory=list)
+    score: int = 0
+    total: int = 0
+    duration_seconds: int = 600
+"""
+Note: timestamps (created_at/updated_at) are added automatically by database helpers.
+"""
